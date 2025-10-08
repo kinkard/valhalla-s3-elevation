@@ -216,6 +216,7 @@ fn parse_graph_tile_name(name: &str) -> Option<ElevationTileId> {
 pub(crate) struct S3 {
     s3_client: aws_sdk_s3::Client,
     bucket: String,
+    // Prefix always ends with a slash or is empty, so joining via `+` works correctly
     prefix: String,
 }
 
@@ -238,7 +239,11 @@ impl S3 {
         Self {
             s3_client,
             bucket: bucket.to_string(),
-            prefix: prefix.to_string(),
+            prefix: if prefix.is_empty() {
+                String::new()
+            } else {
+                format!("{prefix}/")
+            },
         }
     }
 
@@ -247,7 +252,7 @@ impl S3 {
             .s3_client
             .get_object()
             .bucket(&self.bucket)
-            .key(format!("{}/{}", self.prefix, s3_key))
+            .key(self.prefix.clone() + s3_key)
             .send()
             .await
             .context("Failed to get S3 object")?;
@@ -613,12 +618,12 @@ mod tests {
     async fn test_new() {
         let s3 = S3::new("s3://elevation-tiles-prod/skadi").await;
         assert_eq!(s3.bucket, "elevation-tiles-prod");
-        assert_eq!(s3.prefix, "skadi");
+        assert_eq!(s3.prefix, "skadi/");
 
         // With trailing slash
         let s3 = S3::new("s3://elevation-tiles-prod/skadi/").await;
         assert_eq!(s3.bucket, "elevation-tiles-prod");
-        assert_eq!(s3.prefix, "skadi");
+        assert_eq!(s3.prefix, "skadi/");
 
         // Without prefix
         let s3 = S3::new("s3://elevation-tiles-prod").await;
@@ -633,11 +638,11 @@ mod tests {
         // Without s3 scheme
         let s3 = S3::new("elevation-tiles-prod/skadi").await;
         assert_eq!(s3.bucket, "elevation-tiles-prod");
-        assert_eq!(s3.prefix, "skadi");
+        assert_eq!(s3.prefix, "skadi/");
 
         // All together
         let s3 = S3::new("aaaa-aaa-aaa-aa/bbb-bbb/ccc-ccc/ddd-ddd/eee-eee/").await;
         assert_eq!(s3.bucket, "aaaa-aaa-aaa-aa");
-        assert_eq!(s3.prefix, "bbb-bbb/ccc-ccc/ddd-ddd/eee-eee");
+        assert_eq!(s3.prefix, "bbb-bbb/ccc-ccc/ddd-ddd/eee-eee/");
     }
 }

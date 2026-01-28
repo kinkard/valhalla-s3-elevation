@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use flate2::read::GzDecoder;
-use futures::{
+use futures_util::{
     StreamExt, TryFutureExt, TryStreamExt,
     stream::{self},
 };
@@ -247,7 +247,7 @@ impl S3 {
         }
     }
 
-    async fn get_tile(&self, s3_key: &str) -> Result<bytes::Bytes> {
+    async fn get_obj(&self, s3_key: &str) -> Result<bytes::Bytes> {
         let resp = self
             .s3_client
             .get_object()
@@ -279,7 +279,7 @@ impl S3 {
 
         let mut attempt = 0;
         let encoded_tile = loop {
-            match self.get_tile(&s3_key).await {
+            match self.get_obj(&s3_key).await {
                 Ok(data) => break data,
                 Err(e) if attempt == retries => {
                     return Err(anyhow::anyhow!(
@@ -616,6 +616,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_new() {
+        let s3 = S3::new(MAPZEN_PUBLIC_S3).await;
+        assert_eq!(s3.bucket, "elevation-tiles-prod");
+        assert_eq!(s3.prefix, "skadi/");
+
         let s3 = S3::new("s3://elevation-tiles-prod/skadi").await;
         assert_eq!(s3.bucket, "elevation-tiles-prod");
         assert_eq!(s3.prefix, "skadi/");
@@ -644,5 +648,12 @@ mod tests {
         let s3 = S3::new("aaaa-aaa-aaa-aa/bbb-bbb/ccc-ccc/ddd-ddd/eee-eee/").await;
         assert_eq!(s3.bucket, "aaaa-aaa-aaa-aa");
         assert_eq!(s3.prefix, "bbb-bbb/ccc-ccc/ddd-ddd/eee-eee/");
+    }
+
+    #[tokio::test]
+    async fn download_tile() {
+        let s3 = S3::new(MAPZEN_PUBLIC_S3).await;
+        let downloaded = s3.get_obj("N00/N00E000.hgt.gz").await.unwrap();
+        assert!(downloaded.len() > 1024 * 1024); // should be slightly bigger than 1MiB
     }
 }

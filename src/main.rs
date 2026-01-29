@@ -1,6 +1,5 @@
 use std::{
     collections::{HashSet, VecDeque},
-    io::Read,
     path::{Path, PathBuf},
     time::{self, Duration},
 };
@@ -306,21 +305,19 @@ impl S3 {
             std::fs::create_dir_all(&output_dir_path)
                 .context("Failed to create output directory")?;
 
+            // Decompressed tiles are 25MiB in size, use a streaming decoder to keep memory usage low.
             let mut decoder = GzDecoder::new(encoded_tile.as_ref());
-            let mut decompressed_data = Vec::new();
-            decoder
-                .read_to_end(&mut decompressed_data)
-                .context("Failed to decompress gzip data")?;
-
-            let written = decompressed_data.len();
-            std::fs::write(&output_file_path, &decompressed_data).with_context(|| {
+            let mut file = std::fs::File::create(&output_file_path).with_context(|| {
                 format!(
-                    "Failed to write decompressed data to file {}",
+                    "Failed to create output file {}",
                     output_file_path.display()
                 )
             })?;
 
-            Ok::<_, anyhow::Error>(written)
+            let written = std::io::copy(&mut decoder, &mut file)
+                .context("Failed to decompress and write data")?;
+
+            Ok::<_, anyhow::Error>(written as usize)
         })
         .await
         .context("Writing tile failed")??;
@@ -653,7 +650,13 @@ mod tests {
     #[tokio::test]
     async fn download_tile() {
         let s3 = S3::new(MAPZEN_PUBLIC_S3).await;
-        let downloaded = s3.get_obj("N00/N00E000.hgt.gz").await.unwrap();
-        assert!(downloaded.len() > 1024 * 1024); // should be slightly bigger than 1MiB
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let stats = s3
+            .download_tile(ElevationTileId { lat: 0, lon: 0 }, tmp_dir.path(), 3)
+            .await
+            .unwrap();
+        assert!(stats.downloaded > 1024 * 1024); // slightly more than 1MiB compressed
+        assert_eq!(stats.written, 3601 * 3601 * 2); // approx 25MiB uncompressed
     }
 }

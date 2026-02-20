@@ -1,14 +1,13 @@
 # About
 
-A small tool to fetch Mapzen/Tilezen elevation tiles (SRTM HGT) directly from S3 and write them as decompressed .hgt files on disk. It is a drop-in replacement for the download/decompress part of Valhalla’s Python script (valhalla_build_elevation) with high concurrency, retries, and a live progress display.
+A small tool to fetch Mapzen/Tilezen elevation tiles (SRTM HGT) directly from S3 and write them as decompressed .hgt files on disk. It is a drop-in replacement for the download/decompress part of Valhalla’s Python script [valhalla_build_elevation](https://github.com/valhalla/valhalla/blob/master/scripts/valhalla_build_elevation) with high concurrency, retries, and a live progress display.
 
 Key points
 
 - Pulls tiles from any S3 bucket/prefix; defaults to the public ASDI bucket [s3://elevation-tiles-prod/skadi]( https://aws.amazon.com/blogs/publicsector/announcing-terrain-tiles-on-aws-a-qa-with-mapzen/)
-- Writes decompressed .hgt files directly to disk (no .gz files kept)
-- Concurrent downloads with retry and backoff
-- Progress bar with instantaneous/average throughput
+- Decompresses .hgt files on the fly
 - Works with a bbox or a Valhalla graph to determine the tiles to fetch
+- Progress bar with instantaneous/average throughput
 
 ## Build & Run
 
